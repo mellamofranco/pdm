@@ -119,12 +119,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //  2) Lots of little fixes and improvements.
 //
-//33 33
-//12 12
-//13 13
-//14 14 
-//32 32 
-//33 33
 
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
@@ -168,14 +162,14 @@ byte SomeLegsUp = 0;  // this is a flag to detect situations where a user rapidl
 
 //Pixy CmuCam5; // cmu cam 5 support as an SPI device, this is currently experimental
 
-#define SERVO_IIC_ADDR  (0x45)    // default servo driver IIC address
+#define SERVO_IIC_ADDR  (0x40)    // default servo driver IIC address
 Adafruit_PWMServoDriver servoDriver = Adafruit_PWMServoDriver(SERVO_IIC_ADDR); 
 
 #define BeeperPin 4           // digital 4 used for beeper
 #define ServoTypePin 5        // 5 is used to signal digital vs. analog servo mode
 #define ServoTypeGroundPin 6  // 6 provides a ground to pull 5 low if digital servos are in use
-#define GripElbowCurrentPin 32  // current sensor for grip arm elbow servo, only used if GRIPARM mode
-#define GripClawCurrentPin  33  // current sensor for grip claw servo, only used if GRIPARM mode
+#define GripElbowCurrentPin A6  // current sensor for grip arm elbow servo, only used if GRIPARM mode
+#define GripClawCurrentPin  A7  // current sensor for grip claw servo, only used if GRIPARM mode
 #define BF_ERROR  100         // deep beep for error situations
 #define BD_MED    50          // medium long beep duration
 
@@ -372,17 +366,13 @@ byte TrimPose = 0;
 
 void save_trims() {
   Serial.print("SAVE TRIMS:");
-  for (int i = 0; i < NUM_LEGS * 2; i++) {
-    if (EEPROM.read(i + 1) != ServoTrim[i]) { // Only write if the value is different
-      EEPROM.write(i + 1, ServoTrim[i]);
-    }
-    Serial.print(ServoTrim[i]);
-    Serial.print(" ");
+  for (int i = 0; i < NUM_LEGS*2; i++) {
+    EEPROM.update(i+1, ServoTrim[i]);
+    Serial.print(ServoTrim[i]); Serial.print(" ");
   }
   Serial.println("");
-  if (EEPROM.read(0) != 'V') { // Only write if the value is different
-    EEPROM.write(0, 'V');
-  }
+  EEPROM.update(0, 'V');
+
 }
 void erase_trims() {
   Serial.println("ERASE TRIMS");
@@ -1635,8 +1625,8 @@ void setup() {
   delay(150);
   digitalWrite(13,LOW);
   ///////////////////// end of indicator flashing
-  pinMode(12, OUTPUT);
-  pinMode(13, OUTPUT);
+  pinMode(A1, OUTPUT);
+  pinMode(A2, OUTPUT);
   pinMode(ServoTypeGroundPin, OUTPUT);    // will provide a ground for shunt on D6 to indicate digital servo mode
   digitalWrite(ServoTypeGroundPin, LOW);
   pinMode(ServoTypePin, INPUT_PULLUP);    // if high we default to analog servo mode, if pulled to ground
@@ -1644,9 +1634,9 @@ void setup() {
   
   digitalWrite(13, LOW);
   
-  // 12 and 13 provide power to the potentiometer
-  digitalWrite(12, HIGH);
-  digitalWrite(13, LOW);
+  // A1 and A2 provide power to the potentiometer
+  digitalWrite(A1, HIGH);
+  digitalWrite(A2, LOW);
 
   delay(300); // give hardware a chance to come up and stabalize
 
@@ -1855,9 +1845,9 @@ sendSensorData() {
   //checksum += bluewriteword(testword);
   //checksum += bluewriteword(testword);
   /////////////////////////////////////////////////////////////////
-  checksum += bluewriteword(analogRead(14));
-  checksum += bluewriteword(analogRead(32));
-  checksum += bluewriteword(analogRead(33));
+  checksum += bluewriteword(analogRead(A3));
+  checksum += bluewriteword(analogRead(A6));
+  checksum += bluewriteword(analogRead(A7));
   checksum += bluewriteword(ultra);
   if (blocks > 0) {
     //checksum += bluewriteword(CmuCam5.blocks[0].signature);
@@ -3255,7 +3245,7 @@ void loop() {
   checkForCrashingHips();
   
   ////////////////////
-  int p = analogRead(33);
+  int p = analogRead(A0);
   int factor = 1;
   
   if (p < 50) {
@@ -3295,9 +3285,9 @@ void loop() {
     if (millis() > ReportTime) { // do not use hexmillis here
           ReportTime = millis() + 1000;
           Serial.println("Stand Mode, Sensors:");
-          Serial.print(" 14="); Serial.print(analogRead(14));
-          Serial.print(" 32="); Serial.print(analogRead(32));
-          Serial.print(" 33="); Serial.print(analogRead(33));
+          Serial.print(" A3="); Serial.print(analogRead(A3));
+          Serial.print(" A6="); Serial.print(analogRead(A6));
+          Serial.print(" A7="); Serial.print(analogRead(A7));
           Serial.print(" Dist="); Serial.print(readUltrasonic());
           Serial.println("");
     }
@@ -3316,7 +3306,7 @@ void loop() {
     pinMode(13, flash(500));      // flash LED13 moderately fast in servo test mode
     
     for (int i = 0; i < 2*NUM_LEGS+NUM_GRIPSERVOS; i++) {
-      p = analogRead(33);
+      p = analogRead(A0);
       if (p > 300 || p < 150) {
         break;
       }
