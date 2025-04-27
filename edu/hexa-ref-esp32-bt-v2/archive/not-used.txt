@@ -1,0 +1,53 @@
+// pad out packet with nulls to force newer hc05 modules to flush
+void padwrite(int len) {
+
+  if (HC05_pad == 0) {
+    return;  // don't pad
+  }
+
+  // we have to add 4 to the length because the length byte of the protocol does not include th V1, the length byte, or the checksum.
+  int zero = 0;
+  for (int i = len + 4; i < 230; i++) {
+    // BlueTooth.write(zero);
+  }
+}
+
+void sendSensorData() {
+
+  unsigned int ultra = readUltrasonic(); // this delays us 20 milliseconds but we should still be well within timing constraints
+  //uint16_t blocks = CmuCam5.getBlocks(1); // just return the largest object for now
+  int blocks = 0; // comment out cmucam for now
+
+  // BlueTooth.print("V");
+  // BlueTooth.print("1");
+  int length = 8;  //+blocks?10:0; // if there is a cmucam block, we need to add 10 more bytes of data
+  unsigned int checksum = length;
+  // BlueTooth.write(length);
+  //////////////////for testing only////////////////////////////////
+  //int testword = 567; // for testing we will for now hard code the first sensor to a fixed value
+  //checksum += bluewriteword(testword);
+  //checksum += bluewriteword(testword);
+  //checksum += bluewriteword(testword);
+  /////////////////////////////////////////////////////////////////
+  checksum += bluewriteword(analogRead(A3));
+  checksum += bluewriteword(analogRead(A6));
+  checksum += bluewriteword(analogRead(A7));
+  checksum += bluewriteword(ultra);
+  if (blocks > 0) {
+    //checksum += bluewriteword(CmuCam5.blocks[0].signature);
+    //checksum += bluewriteword(CmuCam5.blocks[0].x);
+    //checksum += bluewriteword(CmuCam5.blocks[0].y);
+    //checksum += bluewriteword(CmuCam5.blocks[0].width);
+    //checksum += bluewriteword(CmuCam5.blocks[0].height);
+  }
+
+  checksum = (checksum % 256);
+  // BlueTooth.write(checksum); // end with checksum of data and length
+  //Serial.println("Sens");
+  padwrite(length);
+
+  startedStanding = millis(); // sensor commands are coming from scratch so suppress sleep mode if this comes in
+
+}
+
+
