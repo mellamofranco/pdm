@@ -44,4 +44,6 @@ void packetErrorChirp(char c);
 void dumpPacket();
 void receiveDataHandler(String value);
 
+// String lastReceivedMessage 
+String checkIfData();
 #endif

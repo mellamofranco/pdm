@@ -466,6 +466,11 @@ void processPacketData() {
           mode = packetData[i];
           submode = packetData[i + 1];
           lastCmd = packetData[i + 2];
+
+          Serial.print("MODE: ");
+          Serial.println((char)mode);
+          Serial.println((char)submode);
+          Serial.println((char)lastCmd);
           //Serial.print("GP="); Serial.write(mode);Serial.write(submode);Serial.write(lastCmd);Serial.println("");
           i += 3; // length of mode command is 3 bytes
           continue;
@@ -473,9 +478,10 @@ void processPacketData() {
           // this is an error, we got a command that was not complete
           // so the safest thing to do is toss the entire packet and give an error
           // beep
-          beep(BF_ERROR, BD_MED);
+          // beep(BF_ERROR, BD_MED);
           Serial.println("PKERR:M:Short");
-          return;  // stop processing because we can't trust this packet anymore
+          // return;  // stop processing because we can't trust this packet anymore
+          i++;
         }
         break;
       case 'B':   // beep
@@ -773,7 +779,9 @@ void processPacketData() {
         Serial.print("PKERR:BadSW:"); Serial.print(packetData[i]);
         Serial.print("i="); Serial.print(i); Serial.print(" RCV="); Serial.println(packetLengthReceived);
         beep(BF_ERROR, BD_MED);
-        return;  // something is wrong, so toss the rest of the packet
+        // return;  // something is wrong, so toss the rest of the packet
+        i++;
+        break;
     }
   }
 }
@@ -992,13 +1000,30 @@ void loop() {
       ReportTime = millis() + 2000;
       Serial.print("RC Mode:");
       Serial.print(ServosDetached);
-      Serial.write(lastCmd);
       Serial.write(mode);
       Serial.write(submode);
+      Serial.write(lastCmd);
       Serial.println("");
     }
-    int gotnewdata = receiveDataHandler();  // handle any new incoming data first
+    // int gotnewdata = receiveDataHandler();  // handle any new incoming data first
+    int gotnewdata = 0;  // handle any new incoming data first
+
+    // Serial.print("hola BLE");
     //Serial.print(gotnewdata); Serial.print(" ");
+
+    String newMessage = checkIfData();
+    if (newMessage != "") {
+      Serial.print("Nuevo mensaje recibido: ");
+      Serial.println(newMessage);
+      gotnewdata = 1;
+      processPacketData();
+      // lastCmd = 'f';
+
+      // procesarlo...
+    }
+
+    // Serial.print("chau BLE");
+
 
     // if its been more than 1 second since we got a valid bluetooth command
     // then for safety just stand still.
@@ -1016,6 +1041,7 @@ void loop() {
         //        BlueTooth.begin(9600);
         LastReceiveTime = LastValidReceiveTime = millis();
         lastCmd = -1;  // for safety put it in stop mode
+        // lastCmd = 's';
       }
       long losstime = millis() - LastValidReceiveTime;
       //      Serial.print("LOS "); Serial.println(losstime);  // LOS stands for "Loss of Signal"
@@ -1074,6 +1100,8 @@ void loop() {
     if (mode != MODE_WALK2 || submode != SUBMODE_4) {
       FrontReverse = 0; // clear the reverse front feature if we're not in W4W4 mode (double click on W4 walks by redefining the front of the robot for turning)
     }
+
+    Serial.write(lastCmd);
 
     switch (lastCmd) {
       case '?':
@@ -1321,7 +1349,7 @@ void loop() {
         break;
 
       default:
-        Serial.print("BADCHR:"); Serial.write(lastCmd); Serial.println("");
+        Serial.print("BADCHR:"); Serial.write(lastCmd); Serial.write((char)lastCmd); Serial.println("");
         beep(100, 20);
     }  // end of switch
 

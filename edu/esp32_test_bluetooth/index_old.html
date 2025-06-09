@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Bluetooth ESP32</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .container {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            text-align: center;
+            font-size: 16px;
+            margin: 10px 0;
+            cursor: pointer;
+            border-radius: 4px;
+            width: 100%;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        textarea {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            resize: vertical;
+            min-height: 100px;
+        }
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        #log {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    <h1>Control Bluetooth ESP32</h1>
+    
+    <div class="container">
+        <button id="connectBtn">Conectar a ESP32</button>
+        
+        <div id="statusDiv" class="status disconnected">
+            Desconectado
+        </div>
+        
+        <div id="controlsDiv" style="display: none;">
+            <h2>Enviar mensaje</h2>
+            <textarea id="messageInput" placeholder="Escribe tu mensaje aquí"></textarea>
+            <button id="sendBtn">Enviar mensaje</button>
+            <button id="sendW1fBtn">Mandar @W1f</button>
+        </div>
+        
+        <h2>Log</h2>
+        <div id="log"></div>
+    </div>
+
+    <script>
+        // Variables globales
+        let bluetoothDevice;
+        let bluetoothCharacteristic;
+        
+        // Referencias a elementos DOM
+        const connectBtn = document.getElementById('connectBtn');
+        const statusDiv = document.getElementById('statusDiv');
+        const controlsDiv = document.getElementById('controlsDiv');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const logDiv = document.getElementById('log');
+        
+        // Agregar mensaje al log
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        // Conectar con dispositivo Bluetooth
+        async function connectBluetooth() {
+            log('Buscando dispositivos Bluetooth...');
+            
+            try {
+                // Solicitar dispositivo Bluetooth
+                bluetoothDevice = await navigator.bluetooth.requestDevice({
+                    // Filtro por servicio - necesitarás conocer el UUID del servicio de tu ESP32
+                    filters: [
+                        { services: ['0000181a-0000-1000-8000-00805f9b34fb'] } // Ejemplo UUID para servicios ambientales
+                        // También puedes usar { namePrefix: 'ESP32' } para filtrar por nombre
+                    ],
+                    // O puedes permitir cualquier dispositivo y luego filtrar manualmente
+                    // acceptAllDevices: true,
+                    optionalServices: ['0000181a-0000-1000-8000-00805f9b34fb'] // Servicio que deseas acceder
+                });
+                
+                log(`Dispositivo seleccionado: ${bluetoothDevice.name}`);
+                
+                // Escuchar evento de desconexión
+                bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+                
+                // Conectar al servidor GATT
+                log('Conectando al servidor GATT...');
+                const server = await bluetoothDevice.gatt.connect();
+                
+                // Obtener servicio
+                log('Obteniendo servicio...');
+                const service = await server.getPrimaryService('0000181a-0000-1000-8000-00805f9b34fb');
+                
+                // Obtener característica
+                log('Obteniendo característica...');
+                // Este UUID debe coincidir con la característica en tu ESP32 que quieres usar para comunicación
+                bluetoothCharacteristic = await service.getCharacteristic('00002a6e-0000-1000-8000-00805f9b34fb');
+                
+                // Actualizar UI para mostrar que estamos conectados
+                statusDiv.textContent = 'Conectado a ' + bluetoothDevice.name;
+                statusDiv.classList.remove('disconnected');
+                statusDiv.classList.add('connected');
+                connectBtn.textContent = 'Desconectar';
+                controlsDiv.style.display = 'block';
+                
+                log('¡Conexión exitosa!');
+            } catch (error) {
+                log('Error: ' + error);
+                disconnectBluetooth();
+            }
+        }
+        
+        // Manejar desconexión
+        function onDisconnected() {
+            log('Dispositivo desconectado');
+            disconnectBluetooth();
+        }
+        
+        // Desconectar del dispositivo Bluetooth
+        function disconnectBluetooth() {
+            if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+                bluetoothDevice.gatt.disconnect();
+            }
+            
+            bluetoothCharacteristic = null;
+            
+            // Actualizar UI
+            statusDiv.textContent = 'Desconectado';
+            statusDiv.classList.remove('connected');
+            statusDiv.classList.add('disconnected');
+            connectBtn.textContent = 'Conectar a ESP32';
+            controlsDiv.style.display = 'none';
+        }
+        
+        // Enviar mensaje al ESP32
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            
+            if (!message) {
+                log('El mensaje está vacío');
+                return;
+            }
+            
+            if (!bluetoothCharacteristic) {
+                log('No conectado a dispositivo');
+                return;
+            }
+            
+            try {
+                // Convertir el mensaje a un array de bytes
+                const encoder = new TextEncoder();
+                const messageBytes = encoder.encode(message);
+                
+                // Enviar el mensaje
+                await bluetoothCharacteristic.writeValue(messageBytes);
+                log(`Mensaje enviado: "${message}"`);
+                
+                // Limpiar el input
+                // messageInput.value = '';
+            } catch (error) {
+                log('Error al enviar: ' + error);
+            }
+        }
+        
+        // Event listeners
+        connectBtn.addEventListener('click', async () => {
+            if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+                disconnectBluetooth();
+            } else {
+                await connectBluetooth();
+            }
+        });
+        
+        sendBtn.addEventListener('click', sendMessage);
+
+        // Nuevo event listener para el botón W1f
+        document.getElementById('sendW1fBtn').addEventListener('click', () => {
+            messageInput.value = '@W1f';
+            sendMessage();
+        });
+        
+        // Permitir enviar con Enter mientras se mantiene Ctrl
+        messageInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' && event.ctrlKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        });
+        
+        // Verificar si el navegador soporta Web Bluetooth API
+        if (!navigator.bluetooth) {
+            log('Web Bluetooth API no está disponible en este navegador.');
+            connectBtn.disabled = true;
+            statusDiv.textContent = 'Bluetooth no soportado en este navegador';
+        }
+    </script>
+</body>
+</html>

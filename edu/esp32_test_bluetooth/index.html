@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hexapod Control Web</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            text-align: center;
+        }
+
+        #modesGrid,
+        #movementControls {
+            margin: 20px auto;
+            display: grid;
+            gap: 10px;
+        }
+
+        #modesGrid {
+            grid-template-columns: repeat(4, 60px);
+            width: 270px;
+        }
+
+        #movementControls {
+            grid-template-columns: 60px 60px 60px;
+            width: 200px;
+            margin-top: 40px;
+        }
+
+        button {
+            padding: 15px;
+            font-size: 18px;
+            border: 2px solid #555;
+            border-radius: 8px;
+            background-color: white;
+            cursor: pointer;
+        }
+
+        .selected {
+            background-color: #4CAF50;
+            color: white;
+            border-color: #4CAF50;
+        }
+
+        #log {
+            margin-top: 20px;
+            height: 120px;
+            overflow-y: auto;
+            background: white;
+            padding: 10px;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Hexapod BLE Control</h1>
+    <button onclick="connectBluetooth()">Conectar BLE</button>
+
+    <h2>Selecciona Modo/Submodo</h2>
+    <div id="modesGrid"></div>
+
+    <h2>Controles de Movimiento</h2>
+    <div id="movementControls">
+        <div></div>
+        <button onclick="sendMovement('f')">▲</button>
+        <div></div>
+        <button onclick="sendMovement('l')">◀</button>
+        <button onclick="sendMovement('s')">■</button>
+        <button onclick="sendMovement('r')">▶</button>
+        <div></div>
+        <button onclick="sendMovement('b')">▼</button>
+        <div></div>
+    </div>
+
+    <div id="log"></div>
+
+    <script>
+        let bluetoothDevice;
+        let bluetoothCharacteristic;
+        let selectedMode = '';
+
+        const modes = ['W', 'D', 'F', 'R'];
+        const modesGrid = document.getElementById('modesGrid');
+
+        modes.forEach(mode => {
+            for (let i = 1; i <= 4; i++) {
+                const btn = document.createElement('button');
+                btn.textContent = mode + i;
+                btn.onclick = () => selectMode(btn, mode + i);
+                modesGrid.appendChild(btn);
+            }
+        });
+
+        function selectMode(button, modeValue) {
+            // Deseleccionar todos
+            document.querySelectorAll('#modesGrid button').forEach(btn => btn.classList.remove('selected'));
+            // Seleccionar el actual
+            button.classList.add('selected');
+            selectedMode = modeValue;
+            log('Seleccionado: ' + selectedMode);
+        }
+
+        async function connectBluetooth() {
+            log('Buscando dispositivos Bluetooth...');
+
+            try {
+                bluetoothDevice = await navigator.bluetooth.requestDevice({
+                    filters: [
+                        { services: ['0000181a-0000-1000-8000-00805f9b34fb'] }
+                    ],
+                    optionalServices: ['0000181a-0000-1000-8000-00805f9b34fb']
+                });
+
+                log(`Dispositivo seleccionado: ${bluetoothDevice.name}`);
+
+                // Escuchar evento de desconexión
+                bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+                // Conectar al servidor GATT
+                log('Conectando al servidor GATT...');
+                const server = await bluetoothDevice.gatt.connect();
+
+                // Obtener servicio
+                log('Obteniendo servicio...');
+                const service = await server.getPrimaryService('0000181a-0000-1000-8000-00805f9b34fb');
+
+                // Obtener característica
+                log('Obteniendo característica...');
+                bluetoothCharacteristic = await service.getCharacteristic('00002a6e-0000-1000-8000-00805f9b34fb');
+
+                log('¡Conexión exitosa!');
+            } catch (error) {
+                log('Error conectando a BLE: ' + error);
+                if (typeof disconnectBluetooth === 'function') {
+                    disconnectBluetooth();
+                }
+            }
+        }
+
+        // Agregar función para manejar desconexión
+        function onDisconnected() {
+            log('Dispositivo desconectado');
+            if (typeof disconnectBluetooth === 'function') {
+                disconnectBluetooth();
+            }
+        }
+
+        async function sendMovement(direction) {
+            if (!bluetoothCharacteristic) {
+                log('No conectado a BLE');
+                return;
+            }
+            if (!selectedMode) {
+                log('Selecciona primero un modo/submodo');
+                return;
+            }
+            try {
+                const command = '@' + selectedMode + direction;
+                const encoder = new TextEncoder();
+                const messageBytes = encoder.encode(command);
+                await bluetoothCharacteristic.writeValue(messageBytes);
+                log('Comando enviado: ' + command);
+            } catch (error) {
+                log('Error enviando comando: ' + error);
+            }
+        }
+
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            logDiv.innerHTML += message + '<br>';
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+    </script>
+
+</body>
+
+</html>
